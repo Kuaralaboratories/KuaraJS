@@ -1,9 +1,16 @@
-import OnChange from "https://unpkg.com/on-change@4.0.2/index.js";
+//import OnChange from "https://unpkg.com/on-change@4.0.2/index.js";
 
 class DataStore {
   constructor(initialData = {}) {
     this.data = initialData;
     this.subscribers = new Set();
+    this.proxy = new Proxy(this.data, {
+      set: (target, key, value) => {
+        target[key] = value;
+        this.notifySubscribers();
+        return true;
+      }
+    });
   }
 
   subscribe(subscriber) {
@@ -15,20 +22,18 @@ class DataStore {
   }
 
   notifySubscribers() {
-    this.subscribers.forEach((subscriber) => subscriber(this.data));
+    this.subscribers.forEach(subscriber => subscriber(this.proxy));
   }
 
   setData(key, value) {
-    this.data[key] = value;
-    this.notifySubscribers();
+    this.proxy[key] = value;
   }
 
   getData(key) {
-    return this.data[key];
+    return this.proxy[key];
   }
 }
 
-// Create a global shared data store
 const sharedStore = new DataStore();
 
 function withDataStore(Component) {
@@ -37,6 +42,7 @@ function withDataStore(Component) {
       super(props);
       this.store = sharedStore;
       this.store.subscribe(this.update.bind(this));
+      this.state = { ...this.state, data: this.store.data };
     }
 
     update(data) {
@@ -54,19 +60,28 @@ function withDataStore(Component) {
   }
 }
 
-function injectData(parentComponent, dataKey) {
-  return class extends parentComponent.constructor {
-    constructor(props) {
-      super(props);
-      this.data = parentComponent.getData(dataKey);
-    }
-
-    render() {
-      console.log(`Rendering ${this.constructor.name} with data:`, this.data);
-      super.render();
-    }
+function Input(property) {
+  return function (target, key) {
+    Object.defineProperty(target, key, {
+      get: function () {
+        return this.props[property];
+      },
+      set: function (value) {
+        this.props[property] = value;
+        this.render();
+      }
+    });
   }
 }
 
-export { withDataStore, injectData, sharedStore };
-  
+function Output(property) {
+  return function (target, key) {
+    const eventName = property + 'Changed';
+    target[eventName] = function (value) {
+      this.props[property] = value;
+      this.render();
+    };
+  }
+}
+
+export { withDataStore, Input, Output, sharedStore };
