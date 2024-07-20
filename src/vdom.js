@@ -3,6 +3,7 @@ import Morphdom from "https://unpkg.com/morphdom@2.6.1/dist/morphdom-esm.js";
 import OnChange from "https://unpkg.com/on-change@4.0.2/index.js";
 import { addHandlers } from "./event-handlers.js";
 import { isFunction, isPrimitive } from "./utils.js";
+import { diContainer } from "./diContainer.js";
 
 const h = (type, props, ...children) => ({ type, props, children: children.flat() });
 const html = htm.bind(h);
@@ -16,6 +17,8 @@ function createComponent(node) {
       if (isPrimitive(obj)) console.error("observe must be passed an Object or Array, was passed", obj);
       return OnChange(obj, reRender);
     },
+    store,
+    diContainer, 
   });
 
   function reRender() {
@@ -36,6 +39,13 @@ function createComponent(node) {
   if (Array.isArray(vNodes)) console.error("Component is returning multiple nodes as root. Can only have one.", node.type);
   const $root = createElement(vNodes);
   hasRendered = true;
+
+  const unsubscribe = store.subscribe(reRender);
+
+  $root.addEventListener('DOMNodeRemoved', () => {
+    unsubscribe();
+  });
+
   return $root;
 }
 
