@@ -70,6 +70,7 @@ function isPrimitive(item) {
   return !isFunction(item) && typeof item !== "object";
 }
 
+/* Old Dependency Injection
 class DIContainer {
   constructor() {
     this.services = new Map();
@@ -85,6 +86,13 @@ class DIContainer {
 }
 
 const diContainer = new DIContainer();
+*/
+
+const inject = (di = {}) => (define) => {
+  const func = define(di);
+  func.inject = (overrides) => inject({...di, ...overrides});
+  return func;
+};
 
 class DataStore {
   constructor(initialData = {}) {
@@ -146,7 +154,7 @@ function withDataStore(Component) {
   }
 }
 
-function Input(property) {
+function input(property) {
   return function (target, key) {
     Object.defineProperty(target, key, {
       get: function () {
@@ -160,7 +168,7 @@ function Input(property) {
   }
 }
 
-function Output(property) {
+function output(property) {
   return function (target, key) {
     const eventName = property + 'Changed';
     target[eventName] = function (value) {
@@ -169,6 +177,7 @@ function Output(property) {
     };
   }
 }
+
 const eventName = (event) => event.replace("on", "").toLowerCase();
 
 function addHandlers($el, { props }) {
@@ -181,4 +190,151 @@ function addHandlers($el, { props }) {
     });
 }
 
-export { html, createElement, createComponent,isFunction, isPrimitive, diContainer, withDataStore, Input, Output, sharedStore, addHandlers };
+class router {
+  constructor(options = {}) {
+    this.pathRoot = '';
+    this.routes = [];
+    this.type = options.type || 'path';
+    this.path = options.path || null;
+    this.hash = options.hash || null;
+    this.context = options.context || this;
+    this.handler = options.handler || window;
+
+    this.namedParam = {
+      match: /{([\w-]+)}/g,
+      replace: '([\\w-]+)',
+    };
+
+    if (options.pathRoot) this.setPathRoot(options.pathRoot);
+    if (options.routes) {
+      for (let [route, callback] of Object.entries(options.routes)) {
+        this.add(route, callback);
+      }
+    }
+  }
+
+  add(route, callback) {
+    this.routes.push(new Route(route, callback, this));
+    return this;
+  }
+
+  empty() {
+    this.routes = [];
+    return this;
+  }
+
+  setType(type) {
+    this.type = type;
+    return this;
+  }
+
+  setPathRoot(url) {
+    this.pathRoot = url;
+    return this;
+  }
+
+  setPath(path) {
+    this.path = path;
+    return this;
+  }
+
+  setHash(hash) {
+    this.hash = hash;
+    return this;
+  }
+
+  setContext(context) {
+    this.context = context;
+    return this;
+  }
+
+  setHandler(handler) {
+    this.handler = handler;
+    return this;
+  }
+
+  getUrl(routeType = this.type) {
+    if (routeType === 'path') {
+      let rootRegex = new RegExp(`^${this.pathRoot}/?`);
+      let url = this.path || window.location.pathname.substring(1);
+      return decodeURI(url.replace(rootRegex, ''));
+    } else if (routeType === 'hash') {
+      return decodeURI(this.hash || window.location.hash.substring(1));
+    }
+  }
+
+  match(path, callback) {
+    let route = new Route(path, callback, this);
+    if (route.test(this.getUrl())) {
+      return route.run();
+    }
+  }
+
+  run() {
+    let url = this.getUrl();
+    for (let route of this.routes) {
+      if (route.test(url)) {
+        route.run();
+        return route;
+      }
+    }
+  }
+}
+
+class Route {
+  constructor(path, callback, router) {
+    this.path = path;
+    this.callback = callback;
+    this.router = router;
+    this.values = [];
+  }
+
+  regex() {
+    if (typeof this.path === 'string') {
+      return new RegExp(`^${this.path.replace(/\//g, '\\/').replace(this.router.namedParam.match, this.router.namedParam.replace)}$`);
+    }
+    return this.path;
+  }
+
+  params() {
+    let obj = {};
+    let params = typeof this.path === 'string' ? this.path.match(this.router.namedParam.match) : this.values;
+    params.forEach((param, i) => {
+      let name = typeof this.path === 'string' ? param.replace(this.router.namedParam.match, '$1') : i;
+      obj[name] = this.values[i];
+    });
+    return obj;
+  }
+
+  test(url) {
+    let matches = url.match(this.regex());
+    if (matches) {
+      this.values = matches.slice(1);
+      return true;
+    }
+    return false;
+  }
+
+  run() {
+    if (typeof this.callback === 'string') {
+      return this.router.handler[this.callback](this.params());
+    }
+    return this.callback.call(this.router.context, this.params());
+  }
+}
+
+export { 
+  html, 
+  createElement, 
+  createComponent, 
+  isFunction, 
+  isPrimitive, 
+  /* diContainer, */
+  withDataStore, 
+  input, 
+  output, 
+  sharedStore, 
+  addHandlers, 
+  inject,
+  router,
+};
