@@ -104,6 +104,55 @@ function output(property) {
   }
 }
 
+class Signal {
+  constructor(value) {
+    this.value = value;
+    this.subscribers = [];
+  }
+
+  getValue() {
+    return this.value;
+  }
+
+  setValue(newValue) {
+    this.value = newValue;
+    this.emit();
+  }
+
+  emit() {
+    this.subscribers.forEach((subscriber) => subscriber(this.value));
+  }
+
+  subscribe(callback) {
+    this.subscribers.push(callback);
+  }
+}
+
+let effectCallback = null;
+
+const createEffect = (callback) => {
+   effectCallback = callback;
+   callback();
+   effectCallback = null;
+};
+
+const createSignal = (value) => {
+  const signal = new Signal(value);
+
+  return [
+    function value() {
+      if (effectCallback) {
+        signal.subscribe(effectCallback);
+      }
+
+      return signal.getValue();
+    },
+    function setValue(newVal) {
+      signal.setValue(newVal);
+    },
+  ];
+};
+
 class Router {
   constructor(options = {}) {
     this.pathRoot = options.pathRoot || '';
@@ -183,4 +232,4 @@ class Route {
   }
 }
 
-export { html, createElement, createComponent, isFunction, addHandlers, sharedStore, withDataStore, input, output, Router };
+export { html, createElement, createComponent, isFunction, addHandlers, sharedStore, withDataStore, input, output, createEffect, createSignal, Router };
