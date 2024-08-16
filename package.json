@@ -1,0 +1,15 @@
+{
+  "name": "kuarajs",
+  "version": "1.0.0",
+  "description": "Atomic is better than micro.",
+  "main": "src/kuara.js",
+  "directories": {
+    "src": "src/"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["frontend", "micro", "atomic", "small", "library"],
+  "author": "kuaralabs",
+  "license": "GPL-3.0-only"
+}
