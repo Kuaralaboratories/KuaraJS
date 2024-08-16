@@ -20,43 +20,62 @@ import OnChange from "https://unpkg.com/on-change@4.0.2/index.js";
 const h = (type, props, ...children) => ({ type, props, children: children.flat() });
 const html = htm.bind(h);
 
+function isFunction(item) { return typeof item === 'function'; }
+function addHandlers($el, props) {
+  Object.entries(props).filter(([key]) => key.startsWith("on")).forEach(([event, func]) => $el.addEventListener(event.slice(2).toLowerCase(), func));
+}
+
 function createComponent(node) {
   let hasRendered = false;
-  const renderFn = node.type(node.props, { reRender, observe, store, diContainer });
+
+  const renderFn = node.type(node.props, {
+    reRender,
+    observe: (obj) => {
+      if (isPrimitive(obj)) console.error("observe must be passed an Object or Array, was passed", obj);
+      return OnChange(obj, reRender);
+    },
+  });
 
   function reRender() {
-    if (!hasRendered) console.error("Re-render before initial render");
-    Morphdom($root, createElement(renderFn()), { getNodeKey, onBeforeElUpdated });
+    console.log("reRender");
+    if (!hasRendered) {
+        console.error("Re-render triggered before initial render. Check observables or signals.");
+        return;
+    }
+    Morphdom($root, createElement(renderFn()), {
+        getNodeKey(node) {
+            return node?.dataset?.key;
+        },
+        onBeforeElUpdated: (fromEl, toEl) => {
+            if (toEl.dataset.skip) return false;
+            return !fromEl.isEqualNode(toEl);
+        },
+    });
   }
 
   const vNodes = renderFn();
-  if (Array.isArray(vNodes)) console.error("Component returns multiple root nodes");
+  if (Array.isArray(vNodes)) console.error("Component is returning multiple nodes as root. Can only have one.", node.type);
   const $root = createElement(vNodes);
   hasRendered = true;
-
-  const unsubscribe = store.subscribe(reRender);
-  $root.addEventListener('DOMNodeRemoved', () => unsubscribe());
   return $root;
 }
 
 function createElement(node) {
   if (!node?.type) return document.createTextNode(node);
-  const $el = typeof node.type === 'function' ? createComponent(node) : document.createElement(node.type);
+  const $el = isFunction(node.type) ? createComponent(node) : document.createElement(node.type);
 
   if (node.props) {
     Object.entries(node.props).forEach(([key, val]) => {
-      if (key === "checked" ? val : !isFunction(val) && typeof val !== "object") $el.setAttribute(key, val);
+      if (key === "checked") {
+        if (val) $el.setAttribute(key, val);
+      } else if (isPrimitive(val)) $el.setAttribute(key, val);
     });
-    addHandlers($el, node.props);
+    addHandlers($el, node);
   }
-  node.children.map(createElement).forEach($child => $el.appendChild($child));
+  node.children.map(createElement).forEach(($child) => $el.appendChild($child));
   return $el;
 }
 
-function isFunction(item) { return typeof item === 'function'; }
-function addHandlers($el, props) {
-  Object.entries(props).filter(([key]) => key.startsWith("on")).forEach(([event, func]) => $el.addEventListener(event.slice(2).toLowerCase(), func));
-}
 
 class DataStore {
   constructor(initialData = {}) {
